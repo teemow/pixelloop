@@ -2,9 +2,9 @@
 
 #include <stdio.h>
 
-#include "esp_timer.h"
 #include "lvgl.h"
 #include "pixelloop.h"
+#include "pl_port.h"
 
 static lv_obj_t *s_clock;
 static lv_obj_t *s_counter;
@@ -13,7 +13,7 @@ static int32_t s_clock_override = -1;
 
 static void tick_cb(lv_timer_t *t)
 {
-    uint32_t s = s_clock_override >= 0 ? (uint32_t)s_clock_override : (uint32_t)(esp_timer_get_time() / 1000000);
+    uint32_t s = s_clock_override >= 0 ? (uint32_t)s_clock_override : (uint32_t)(pl_uptime_us() / 1000000);
     lv_label_set_text_fmt(s_clock, "%02lu:%02lu:%02lu", (unsigned long)(s / 3600), (unsigned long)((s / 60) % 60),
                           (unsigned long)(s % 60));
 }
@@ -43,8 +43,9 @@ void ui_create(void)
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x0b0f1a), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    const int32_t w = lv_display_get_horizontal_resolution(NULL);
-    const int32_t h = lv_display_get_vertical_resolution(NULL);
+    lv_display_t *disp = lv_display_get_default();
+    const int32_t w = lv_display_get_horizontal_resolution(disp);
+    const int32_t h = lv_display_get_vertical_resolution(disp);
 
     lv_obj_t *title = lv_label_create(scr);
     lv_label_set_text(title, "PixelLoop");

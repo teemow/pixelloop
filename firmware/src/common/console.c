@@ -5,10 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "driver/usb_serial_jtag.h"
-#include "driver/usb_serial_jtag_vfs.h"
-#include "esp_log.h"
-#include "esp_system.h"
+#include "pl_port.h"
 
 #define MAX_CMDS 24
 #define MAX_ARGS 12
@@ -50,8 +47,7 @@ static void cmd_help(int argc, char **argv)
 static void cmd_reset(int argc, char **argv)
 {
     console_ok();
-    fflush(stdout);
-    esp_restart();
+    pl_restart();
 }
 
 void console_register(const char *name, console_cmd_fn fn, const char *help)
@@ -63,17 +59,7 @@ void console_register(const char *name, console_cmd_fn fn, const char *help)
 
 void console_init(void)
 {
-    // Switch the console to the interrupt-driven driver so stdin blocks
-    // properly and large stdout writes (screenshots) are buffered.
-    usb_serial_jtag_driver_config_t cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    cfg.tx_buffer_size = 8192;
-    cfg.rx_buffer_size = 1024;
-    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&cfg));
-    usb_serial_jtag_vfs_use_driver();
-    usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_LF);
-    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_LF);
-    setvbuf(stdin, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IOLBF, 0);
+    pl_console_setup();
     console_register("help", cmd_help, "list commands");
     console_register("reset", cmd_reset, "reboot");
 }

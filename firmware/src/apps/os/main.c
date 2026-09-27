@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "board_api.h"
+#include "cmds.h"
 #include "console.h"
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
@@ -10,12 +11,11 @@
 #include "lvgl.h"
 #include "nvs_flash.h"
 #include "pixelloop.h"
+#include "pl_port.h"
 #include "synth_input.h"
 #include "ui.h"
 
 static const char *TAG = "os";
-
-void os_register_commands(void);
 
 void app_main(void)
 {
@@ -43,10 +43,10 @@ void app_main(void)
     ESP_LOGI(TAG, "display %ldx%ld, touch %s", (long)lv_display_get_horizontal_resolution(disp),
              (long)lv_display_get_vertical_resolution(disp), touch ? "yes" : "no");
 
-    lvgl_port_lock(0);
+    pl_lvgl_lock();
     synth_input_create(disp);
     ui_create();
-    lvgl_port_unlock();
+    pl_lvgl_unlock();
 
     board_backlight_set(100);
     os_register_commands();

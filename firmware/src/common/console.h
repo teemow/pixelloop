@@ -1,5 +1,6 @@
 #pragma once
-// Line-oriented command console on the USB-Serial/JTAG port.
+// Line-oriented command console on the platform's console stream (the
+// USB-Serial/JTAG port on the device, stdin/stdout in the simulator).
 // Replies start with OK / ERR so the host can tell them from log output.
 #include <stdbool.h>
 
