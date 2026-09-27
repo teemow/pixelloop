@@ -2,8 +2,9 @@
 
 You are working on firmware for an ESP32-S3 display board that is plugged into
 this machine over USB. You can build, flash, drive the UI and take screenshots
-without a human touching the device. This file tells you how. `CLAUDE.md` is a
-symlink to it.
+without a human touching the device. The same UI also runs in a desktop
+simulator (`sim/`) that speaks the same protocol, so UI work iterates without
+a flash. This file tells you how. `CLAUDE.md` is a symlink to it.
 
 ## The loop
 
@@ -39,6 +40,44 @@ For firmware that does not speak the protocol (bring-up tests, third-party
 images) `make capture SECONDS=20` resets the board and records the raw console
 into `artifacts/capture.log`, flagging crash markers.
 
+## The simulator
+
+`sim/` builds the OS's UI sources (`firmware/src/apps/os/ui.c`, `cmds.c`,
+`screenshot.c`, `synth_input.c`, `firmware/src/common/console.c`) unchanged
+against LVGL (the version pinned in `firmware/dependencies.lock`, fetched by
+CMake) with the SDL2 window driver. It speaks the device console protocol on
+stdin/stdout and prints `PIXELLOOP-READY` once the first frame is rendered, so
+every host tool works on it: `--port sim:` launches `sim/build/pixelloop-sim`
+instead of opening a serial port (`sim:<path>` for another binary).
+
+```
+make sim                          build + open the window (stdin is the console; type `help`)
+make sim-shot NAME=home           artifacts/sim/home.png
+make sim-drive SCRIPT=tests/smoke.txt
+make sim-test [UPDATE=1]          tests/*.txt against tests/golden/sim/
+```
+
+- **Use it first.** Layout, colours, fonts, widget behaviour: iterate in the
+  simulator (a rebuild is ~1 s, a screenshot ~0.4 s), then confirm on the
+  device. The simulator renders through the same LVGL software renderer with
+  the same configuration (`sim/lv_kconfig.h` is generated from the device's
+  `sdkconfig`), and its goldens are currently pixel-identical to the ws169
+  device goldens. Timing, SPI, PSRAM, touch controller and panel quirks still
+  only show up on hardware, so `make test` on the device stays the final word.
+- **Headless works.** Without `DISPLAY`/`WAYLAND_DISPLAY`, or with
+  `--headless` (which the host tools always pass), the simulator renders
+  offscreen (`SDL_VIDEODRIVER=offscreen`). CI runs `make sim-test` this way.
+- **`reset` restarts the process.** The `reset` step of a drive script starts
+  a fresh simulator; the `reset` console command re-execs it. Both end with a
+  new `PIXELLOOP-READY`, like the device.
+- **After changing the firmware's LVGL config** (`sdkconfig.defaults.os`: a
+  new font, colour depth, a widget): delete `firmware/sdkconfig.<env>`,
+  `make build`, then `make sim-lvconf` and commit `sim/lv_kconfig.h`. The
+  simulator's CMake refuses to configure while the header is out of date
+  with a local `firmware/sdkconfig.<board>`.
+- Simulator artifacts live under `artifacts/sim/` so they never overwrite the
+  device's.
+
 Ground truth beyond the framebuffer: `make photo NAME=desk` takes a webcam
 picture of the physical board (point the camera at it). Use it when the
 framebuffer says one thing and you suspect the panel shows another (wrong
@@ -60,6 +99,14 @@ orientation, backlight off, colour swap).
   `board.h` and use its `BOARD_*` macros. Adding a board = a new directory under
   `boards/`, an `[env:<id>]` in `firmware/platformio.ini`, a fingerprint in
   `tools/probe.py`, and a row in `boards/README.md`.
+- **OS code never includes ESP-IDF headers.** `ui.c`, `cmds.c`, `screenshot.c`,
+  `synth_input.c` and `console.c` include only `lvgl.h`, libc and
+  `firmware/src/common/pl_port.h`, the port layer (uptime, LVGL lock, large
+  buffers, CRC/base64, memory stats, console setup, restart, log). It is
+  implemented twice: `pl_port_esp.c` for the chip, `sim/src/pl_port_host.c`
+  for the host. Something new that is chip-specific goes behind a function
+  there, never behind an `#ifdef` in UI code. The simulator build is the check:
+  it compiles those files with no ESP include path at all.
 - **Deep sleep takes the USB port with it.** The console runs on the chip's
   native USB-Serial/JTAG; when the firmware deep-sleeps, `/dev/ttyACM0`
   disappears and nothing on the host can reset or reflash the board until it
@@ -75,19 +122,23 @@ orientation, backlight off, colour swap).
 firmware/            ESP-IDF 5.5 project (built with PlatformIO / pioarduino)
   platformio.ini     one env per board; PIXELLOOP_APP + PIXELLOOP_BOARD select what gets built
   src/apps/<app>/    probe (board identification), os (the PixelLoop OS)
-  src/common/        code shared by every app
+  src/common/        code shared by every app; pl_port.h is the platform contract
   sdkconfig.defaults chip defaults; sdkconfig.defaults.<board> for per-board overrides
 boards/<id>/         board.h (pin map, display/touch parameters) + board-specific drivers
+sim/                 desktop simulator: CMake project over the OS sources + LVGL/SDL2
+  lv_kconfig.h       the device's LVGL configuration, generated (make sim-lvconf)
+  src/               main (window, render loop, console thread), host port layer
 tools/               host side of the loop (Python, run with `uv run`, deps declared inline)
-tests/               drive scripts + golden screenshots
-artifacts/           per-run output: probe.json, boot.log, *.png, *.jpg (git-ignored)
+tests/               drive scripts + golden screenshots (golden/<board>/, golden/sim/)
+artifacts/           per-run output: probe.json, boot.log, *.png, *.jpg, sim/ (git-ignored)
 ```
 
 ## Device console protocol
 
 The firmware speaks a line protocol on the USB console (115200 8N1, the baud
-rate is irrelevant on USB-Serial/JTAG). Commands are plain text, replies are
-prefixed so they can be filtered out of ordinary log output:
+rate is irrelevant on USB-Serial/JTAG); the simulator speaks it on
+stdin/stdout. Commands are plain text, replies are prefixed so they can be
+filtered out of ordinary log output:
 
 | command | reply |
 |---|---|
@@ -98,8 +149,8 @@ prefixed so they can be filtered out of ordinary log output:
 | `clock <seconds>` / `clock run` | `OK` — freeze the displayed time (test hook) / follow uptime again |
 | `reset` | reboots |
 
-Fixed console lines: `PIXELLOOP-READY` once the UI is up; the probe emits
-`PROBE-BEGIN` / `PROBE-END` blocks.
+Fixed console lines: `PIXELLOOP-READY` once the UI is up (the simulator adds
+`sim=1`); the probe emits `PROBE-BEGIN` / `PROBE-END` blocks.
 
 ## Toolchain facts
 
@@ -119,3 +170,7 @@ Fixed console lines: `PIXELLOOP-READY` once the UI is up; the probe emits
   header (PEP 723), no virtualenv to manage.
 - The USB-Serial/JTAG device enumerates as `/dev/ttyACM0` (`303a:1001`); the
   user must be in the `uucp`/`dialout` group.
+- The simulator needs CMake 3.24+, Ninja, a C compiler and the SDL2
+  development package (`libsdl2-dev` / `sdl2`). The first configure clones
+  LVGL from GitHub (shallow, ~30 s); after that the build is offline. The
+  build directory is `sim/build/` (git-ignored), `make clean` removes it.

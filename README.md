@@ -12,7 +12,9 @@ change code  →  flash the device  →  drive the UI  →  screenshot  →  ite
 Everything an agent needs is a `make` target, everything it sees is a file
 under `artifacts/`. The first target hardware is the Waveshare
 ESP32-S3-Touch-LCD family (round and rectangular, 1.28" to 7"), but the board
-layer is the only part that knows about a specific panel.
+layer is the only part that knows about a specific panel. A desktop simulator
+runs the same UI code and answers the same commands, for the iterations that
+do not need the hardware.
 
 ## Status
 
@@ -28,10 +30,13 @@ The loop runs end to end on the Waveshare ESP32-S3-Touch-LCD-1.69 (`ws169`):
 | framebuffer screenshot as PNG | `make shot NAME=home` | 0.6 s |
 | scripted taps/swipes + screenshots | `make drive SCRIPT=tests/smoke.txt` | ~4 s |
 | golden-image regression | `make test` | ~4 s |
+| the same, in the desktop simulator (no device) | `make sim-shot`, `make sim-test` | ~1.5 s |
 
 The screenshot above is `tests/golden/ws169/smoke--home.png`, taken by the
-device itself over USB. Next: the desktop simulator, more boards from the
-family (`boards/README.md` has their pinouts), and real apps.
+device itself over USB. The simulator (`sim/`, LVGL 9 + SDL2, headless in CI)
+compiles the very same UI sources; its goldens in `tests/golden/sim/` are
+pixel-identical to the device's. Next: more boards from the family
+(`boards/README.md` has their pinouts), and real apps.
 
 ## Quick start
 
@@ -41,18 +46,22 @@ make probe                  # plug in the board first; writes artifacts/probe.js
 make run                    # flash the OS for the identified board, capture boot log
 make shot NAME=home         # artifacts/home.png
 make drive SCRIPT=tests/smoke.txt
+make sim                    # no board? the same UI in an SDL2 window
+make sim-test               # ... and the same tests against it
 ```
 
 Requirements: PlatformIO (`pip install platformio` or your distro package),
-`uv`, and a user that may open `/dev/ttyACM*`. Optional: `ffmpeg` for webcam
-photos of the physical board.
+`uv`, and a user that may open `/dev/ttyACM*`. For the simulator: CMake,
+Ninja, a C compiler and SDL2 development headers. Optional: `ffmpeg` for
+webcam photos of the physical board.
 
 ## Why a loop and not a simulator only
 
-A desktop simulator gives fast, deterministic screenshots, and PixelLoop will
-have one. But displays are hardware: SPI timings, PSRAM bandwidth, touch
+The desktop simulator gives fast, deterministic screenshots, and it is where
+UI work starts. But displays are hardware: SPI timings, PSRAM bandwidth, touch
 controller quirks, backlight PWM and panel orientation only show up on the real
-thing. The loop makes the real thing as cheap to poke as the simulator.
+thing. The loop makes the real thing as cheap to poke as the simulator, and
+both answer the same commands, so a drive script written once runs on either.
 
 ## Layout
 
