@@ -1,6 +1,7 @@
 name: build
-# Compiles every firmware env on a clean runner. Hardware-in-the-loop tests
-# need the device and run locally (`make test`); this only proves the tree builds.
+# Compiles every firmware env on a clean runner and runs the golden tests
+# against the desktop simulator. Hardware-in-the-loop tests need the device
+# and run locally (`make test`).
 on:
   push:
     branches: [main]
@@ -39,4 +40,27 @@ jobs:
             firmware/.pio/build/${{ matrix.env }}/firmware.bin
             firmware/.pio/build/${{ matrix.env }}/bootloader.bin
             firmware/.pio/build/${{ matrix.env }}/partitions.bin
+          if-no-files-found: error
+
+  simulator:
+    # The OS UI on the host: same sources, LVGL + SDL2 rendering offscreen.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install SDL2 and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsdl2-dev ninja-build
+      - uses: astral-sh/setup-uv@v10
+      - name: Build the simulator
+        run: make sim-build
+      - name: Golden tests against the simulator
+        env:
+          SDL_VIDEODRIVER: offscreen
+        run: make sim-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-screenshots
+          path: artifacts/sim
           if-no-files-found: error
