@@ -95,8 +95,10 @@ Fixed console lines: `PIXELLOOP-READY` once the UI is up; the probe emits
 
 - PlatformIO with the pioarduino `espressif32` platform builds ESP-IDF 5.5 for
   the ESP32-S3. Use the core pioarduino installs at `~/.platformio/penv/bin/pio`
-  (the Makefile does); a distro `pio` 6.2 on Python 3.14 reinstalls SCons on
-  every run and the link step fails with a missing `SCons.Tool` module.
+  (the Makefile does) or any PlatformIO core below 6.2 (CI pins
+  `platformio>=6.1.18,<6.2`); core 6.2 pins SCons 4.11, the platform pins
+  4.8.1, they reinstall each other mid-run and the link step fails with a
+  missing `SCons.Tool` module.
   The very first ESP-IDF build on a machine installs
   tool packages (GDB, CMake, ninja) into `~/.platformio` and can take 10+
   minutes; later builds take seconds to a couple of minutes.
