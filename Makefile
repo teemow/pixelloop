@@ -11,8 +11,16 @@
 #   make monitor               interactive serial console (Ctrl-C to leave)
 #   make photo NAME=desk       webcam photo of the physical device -> artifacts/desk.jpg
 #
-# BOARD defaults to the board identified by the last `make probe`.
-# PORT defaults to the first Espressif USB-Serial/JTAG device.
+# The same UI on the desktop, no device needed (sim/):
+#   make sim                   build + open the simulator window (stdin is its console)
+#   make sim-shot NAME=home    screenshot the simulator -> artifacts/sim/home.png
+#   make sim-drive SCRIPT=tests/smoke.txt
+#   make sim-test              every tests/*.txt against tests/golden/sim/
+#   make sim-lvconf            refresh sim/lv_kconfig.h from firmware/sdkconfig.<board>
+#
+# BOARD defaults to the board identified by the last `make probe` (the
+# simulator falls back to ws169). PORT defaults to the first Espressif
+# USB-Serial/JTAG device.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -31,7 +39,15 @@ NAME  ?= shot
 # lock so a flash never races a monitor or a screenshot.
 LOCK  := flock $(ART)/.port.lock
 
-.PHONY: help probe build flash run shot drive test capture monitor photo clean need-board
+# Desktop simulator (sim/): host CMake project, board geometry from boards/.
+SIM_BOARD ?= $(or $(BOARD),ws169)
+SIM_BUILD := sim/build
+SIM_BIN   := $(SIM_BUILD)/pixelloop-sim
+SIM_ART   := $(ART)/sim
+CMAKE     ?= cmake
+
+.PHONY: help probe build flash run shot drive test capture monitor photo clean need-board \
+        sim sim-build sim-shot sim-drive sim-test sim-lvconf
 
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-10s %s\n", $$1, $$2}'
@@ -74,5 +90,30 @@ monitor: ## interactive serial console
 photo: | $(ART) ## webcam photo of the physical device -> artifacts/NAME.jpg
 	tools/photo.sh $(ART)/$(NAME).jpg
 
+# ---------------------------------------------------------------------------
+# Desktop simulator. No port lock needed: every run is its own process.
+
+sim-build: ## build the desktop simulator for SIM_BOARD (default: BOARD, else ws169)
+	$(CMAKE) -S sim -B $(SIM_BUILD) -G Ninja -DPIXELLOOP_BOARD=$(SIM_BOARD) >/dev/null
+	$(CMAKE) --build $(SIM_BUILD)
+
+sim: sim-build ## run the simulator in a window; type console commands on stdin
+	$(SIM_BIN)
+
+sim-shot: sim-build | $(ART) ## screenshot the simulator -> artifacts/sim/NAME.png
+	$(UV) run tools/shot.py --port sim:$(SIM_BIN) --out $(SIM_ART)/$(NAME).png
+
+sim-drive: sim-build | $(ART) ## run a tap/swipe/shot script against the simulator
+	@test -n "$(SCRIPT)" || { echo "pass SCRIPT=tests/<file>.txt"; exit 1; }
+	$(UV) run tools/drive.py --port sim:$(SIM_BIN) --script $(SCRIPT) --out-dir $(SIM_ART)
+
+sim-test: sim-build | $(ART) ## run every test under tests/ against the simulator (UPDATE=1 accepts goldens)
+	@mkdir -p $(SIM_ART)
+	$(UV) run tools/test.py --port sim:$(SIM_BIN) --board sim --out-dir $(SIM_ART) $(if $(UPDATE),--update,)
+
+sim-lvconf: need-board ## regenerate sim/lv_kconfig.h from firmware/sdkconfig.BOARD (build the firmware first)
+	@test -f $(FW)/sdkconfig.$(BOARD) || { echo "$(FW)/sdkconfig.$(BOARD) missing: run 'make build' first"; exit 1; }
+	$(UV) run tools/lvconf.py --sdkconfig $(FW)/sdkconfig.$(BOARD) --out sim/lv_kconfig.h
+
 clean: ## remove build output and artifacts
-	rm -rf $(FW)/.pio $(ART)
+	rm -rf $(FW)/.pio $(SIM_BUILD) $(ART)
