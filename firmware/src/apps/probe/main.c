@@ -114,6 +114,9 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "PixelLoop probe %s (app %s, board %s)", PIXELLOOP_VERSION, PIXELLOOP_APP_NAME,
              PIXELLOOP_BOARD_NAME);
+    // Pins that are not an I2C bus on this board time out on every address;
+    // the driver's per-address error line would drown the report.
+    esp_log_level_set("i2c.master", ESP_LOG_NONE);
     for (;;) {
         printf("PROBE-BEGIN\n");
         print_chip();

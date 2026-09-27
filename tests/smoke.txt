@@ -1,7 +1,8 @@
 # Boots to the home screen, reacts to a tap, and stays alive.
 reset
 expect-log PIXELLOOP-READY 40
-wait 800
+send clock 43200      # 12:00:00 - never let a golden depend on boot timing
+wait 500
 shot home
 tap 120 200          # the counter button on the home screen
 wait 400

@@ -30,8 +30,10 @@ edit code  →  make flash  →  make run (boot log)  →  make shot / make driv
    desktop simulator, so write them once.
 6. **Regression:** `make test` runs every `tests/*.txt`, compares screenshots
    against `tests/golden/<board>/*.png` (per-pixel tolerance) and fails on
-   drift. Update a golden only after you have looked at the new PNG and it is
-   right.
+   drift. `make test UPDATE=1` accepts the current screenshots as goldens; do
+   that only after you have looked at the new PNGs and they are right.
+   Anything time-dependent on screen must be pinned by the script first
+   (`send clock 43200`), otherwise the golden flakes.
 
 Ground truth beyond the framebuffer: `make photo NAME=desk` takes a webcam
 picture of the physical board (point the camera at it). Use it when the
@@ -82,7 +84,8 @@ prefixed so they can be filtered out of ordinary log output:
 | `shot` | `SHOT <w> <h> <fmt> <bytes>` then the raw framebuffer, then `SHOT-END` |
 | `tap <x> <y>` | `OK` — synthesises a touch press/release at x,y |
 | `swipe <x1> <y1> <x2> <y2> [ms]` | `OK` — synthesises a drag |
-| `stats` | `STATS {json}` — free heap/PSRAM, fps, uptime, active screen |
+| `stats` | `STATS {json}` — free heap/PSRAM, uptime, active screen, input queue idle |
+| `clock <seconds>` / `clock run` | `OK` — freeze the displayed time (test hook) / follow uptime again |
 | `reset` | reboots |
 
 Fixed console lines: `PIXELLOOP-READY` once the UI is up; the probe emits
@@ -90,8 +93,11 @@ Fixed console lines: `PIXELLOOP-READY` once the UI is up; the probe emits
 
 ## Toolchain facts
 
-- PlatformIO (`pio`) with the pioarduino `espressif32` platform builds ESP-IDF
-  5.5 for the ESP32-S3. The very first ESP-IDF build on a machine installs
+- PlatformIO with the pioarduino `espressif32` platform builds ESP-IDF 5.5 for
+  the ESP32-S3. Use the core pioarduino installs at `~/.platformio/penv/bin/pio`
+  (the Makefile does); a distro `pio` 6.2 on Python 3.14 reinstalls SCons on
+  every run and the link step fails with a missing `SCons.Tool` module.
+  The very first ESP-IDF build on a machine installs
   tool packages (GDB, CMake, ninja) into `~/.platformio` and can take 10+
   minutes; later builds take seconds to a couple of minutes.
 - `sdkconfig.defaults*` are only read when `firmware/sdkconfig.<env>` does not

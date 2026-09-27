@@ -1,6 +1,7 @@
 // Console commands that need LVGL: shot, tap, swipe, stats.
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "console.h"
 #include "esp_heap_caps.h"
@@ -68,8 +69,22 @@ static void cmd_stats(int argc, char **argv)
     console_ok();
 }
 
+static void cmd_clock(int argc, char **argv)
+{
+    if (argc != 2) {
+        console_err("usage: clock <seconds-since-midnight>|run");
+        return;
+    }
+    int32_t v = strcmp(argv[1], "run") == 0 ? -1 : atoi(argv[1]);
+    lvgl_port_lock(0);
+    ui_clock_override(v);
+    lvgl_port_unlock();
+    console_ok();
+}
+
 void os_register_commands(void)
 {
+    console_register("clock", cmd_clock, "clock <seconds>|run - freeze the clock for reproducible shots");
     console_register("shot", cmd_shot, "dump the framebuffer (SHOT ... SHOT-END)");
     console_register("tap", cmd_tap, "tap <x> <y>");
     console_register("swipe", cmd_swipe, "swipe <x1> <y1> <x2> <y2> [ms]");

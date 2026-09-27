@@ -16,7 +16,10 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-PIO   ?= pio
+# pioarduino ships its own PlatformIO core under ~/.platformio/penv whose
+# SCons pin matches the platform; a distro `pio` (6.2, Python 3.14) reinstalls
+# SCons on every run and the link step dies. Prefer the bundled core.
+PIO   ?= $(shell test -x $$HOME/.platformio/penv/bin/pio && echo $$HOME/.platformio/penv/bin/pio || echo pio)
 UV    ?= uv
 FW    := firmware
 ART   := artifacts
@@ -58,8 +61,8 @@ drive: | $(ART) ## run a tap/swipe/shot script against the device
 	@test -n "$(SCRIPT)" || { echo "pass SCRIPT=tests/<file>.txt"; exit 1; }
 	$(LOCK) $(UV) run tools/drive.py --port $(PORT) --script $(SCRIPT) --out-dir $(ART)
 
-test: need-board | $(ART) ## run every test under tests/ against the device
-	$(LOCK) $(UV) run tools/test.py --port $(PORT) --board $(BOARD) --out-dir $(ART)
+test: need-board | $(ART) ## run every test under tests/ against the device (UPDATE=1 accepts goldens)
+	$(LOCK) $(UV) run tools/test.py --port $(PORT) --board $(BOARD) --out-dir $(ART) $(if $(UPDATE),--update,)
 
 monitor: ## interactive serial console
 	$(LOCK) bash -c 'cd $(FW) && $(PIO) device monitor -p $(PORT) -b 115200'

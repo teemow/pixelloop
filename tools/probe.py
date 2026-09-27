@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyserial>=3.5"]
+# dependencies = ["pyserial>=3.5", "pillow>=10", "numpy>=1.26"]
 # ///
 """Identify the attached board from the probe firmware's report.
 
@@ -18,7 +18,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from serial_ctl import find_port, hard_reset, open_port, read_lines  # noqa: E402
+from serial_ctl import Device  # noqa: E402
 
 # (sda, scl) -> {addr: chip}. Only pins that are I2C on at least one board are
 # probed by the firmware; the mapping here turns addresses into names.
@@ -110,16 +110,21 @@ def main() -> int:
     ap.add_argument("--no-reset", action="store_true")
     args = ap.parse_args()
 
-    port = find_port(args.port)
-    ser = open_port(port)
+    dev = Device(args.port, echo=True)
+    port = dev.port
     if not args.no_reset:
-        hard_reset(ser)
-    ser.reset_input_buffer()
+        dev.reset()
 
     report: dict = {}
     scan: dict[tuple[int, int], set[int]] = {}
     in_block = False
-    for line in read_lines(ser, args.timeout, stop_marker="PROBE-END", echo=True):
+    deadline = time.monotonic() + args.timeout
+    while time.monotonic() < deadline:
+        line = dev.readline(1.0)
+        if line is None:
+            continue
+        if "PROBE-END" in line and in_block:
+            break
         if "PROBE-BEGIN" in line:
             in_block = True
             continue
@@ -130,10 +135,14 @@ def main() -> int:
         except json.JSONDecodeError:
             continue
         if rec.get("k") == "i2c":
-            scan[(rec["sda"], rec["scl"])] = set(rec["addrs"])
+            addrs = set(rec["addrs"])
+            # A real bus has a handful of devices. Dozens of ACKs means the
+            # pins are something else (LCD SPI lines on the 1.69) and the
+            # open-drain probe is reading noise.
+            scan[(rec["sda"], rec["scl"])] = addrs if len(addrs) <= 12 else set()
         else:
             report.update(rec)
-    ser.close()
+    dev.close()
 
     if not in_block:
         print("no PROBE-BEGIN seen: is the probe firmware flashed? (make probe)", file=sys.stderr)

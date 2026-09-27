@@ -14,15 +14,22 @@ layer is the only part that knows about a specific panel.
 
 ## Status
 
-Bootstrapping. What exists today:
+The loop runs end to end on the Waveshare ESP32-S3-Touch-LCD-1.69 (`ws169`):
 
-- `make probe` — identifies the attached board (chip, flash, PSRAM, I2C
-  fingerprint) and records it for the other targets.
-- The firmware project (ESP-IDF 5.5 via PlatformIO), the board reference for
-  seven Waveshare boards, and the agent playbook in [AGENTS.md](AGENTS.md).
+<img src="docs/ws169-home.png" width="240" alt="PixelLoop home screen, captured from the device framebuffer">
 
-Next: the OS app (LVGL 9), the console protocol for screenshots and synthetic
-input, the desktop simulator, and golden-image tests.
+| step | command | takes |
+|---|---|---|
+| identify the board (chip, flash, PSRAM, I2C fingerprint) | `make probe` | ~10 s after flashing |
+| build + flash the OS (ESP-IDF 5.5, LVGL 9) | `make flash` | ~15 s incremental |
+| reset and wait for `PIXELLOOP-READY` | `make run` | 1.2 s boot |
+| framebuffer screenshot as PNG | `make shot NAME=home` | 0.6 s |
+| scripted taps/swipes + screenshots | `make drive SCRIPT=tests/smoke.txt` | ~4 s |
+| golden-image regression | `make test` | ~4 s |
+
+The screenshot above is `tests/golden/ws169/smoke--home.png`, taken by the
+device itself over USB. Next: the desktop simulator, more boards from the
+family (`boards/README.md` has their pinouts), and real apps.
 
 ## Quick start
 

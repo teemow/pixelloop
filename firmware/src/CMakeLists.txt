@@ -19,9 +19,10 @@ idf_component_register(
     ${CMAKE_CURRENT_LIST_DIR}/common
     ${CMAKE_CURRENT_LIST_DIR}/../../boards/${PIXELLOOP_BOARD}
   REQUIRES
-    esp_driver_i2c esp_driver_gpio esp_driver_spi
-    esp_psram spi_flash esp_app_format esp_timer esp_hw_support
-    nvs_flash vfs
+    esp_driver_i2c esp_driver_gpio esp_driver_spi esp_driver_ledc
+    esp_driver_usb_serial_jtag esp_lcd esp_psram spi_flash esp_app_format
+    esp_timer esp_hw_support nvs_flash vfs mbedtls
+    lvgl esp_lvgl_port esp_lcd_touch_cst816s
 )
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE

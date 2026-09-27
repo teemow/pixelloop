@@ -9,10 +9,11 @@
 static lv_obj_t *s_clock;
 static lv_obj_t *s_counter;
 static int s_count;
+static int32_t s_clock_override = -1;
 
 static void tick_cb(lv_timer_t *t)
 {
-    uint32_t s = (uint32_t)(esp_timer_get_time() / 1000000);
+    uint32_t s = s_clock_override >= 0 ? (uint32_t)s_clock_override : (uint32_t)(esp_timer_get_time() / 1000000);
     lv_label_set_text_fmt(s_clock, "%02lu:%02lu:%02lu", (unsigned long)(s / 3600), (unsigned long)((s / 60) % 60),
                           (unsigned long)(s % 60));
 }
@@ -26,6 +27,14 @@ static void counter_cb(lv_event_t *e)
 const char *ui_active_screen_name(void)
 {
     return "home";
+}
+
+void ui_clock_override(int32_t seconds)
+{
+    s_clock_override = seconds;
+    if (s_clock) {
+        tick_cb(NULL);
+    }
 }
 
 void ui_create(void)

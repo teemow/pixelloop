@@ -1,0 +1,7 @@
+## Managed components (ESP Component Registry). The lock file next to this
+## project pins exact versions; `pio run` fetches them into managed_components/.
+dependencies:
+  idf: ">=5.5"
+  lvgl/lvgl: "^9.3"
+  espressif/esp_lvgl_port: "^2.9"
+  espressif/esp_lcd_touch_cst816s: "^1.1"

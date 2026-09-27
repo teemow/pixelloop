@@ -1,0 +1,40 @@
+name: build
+# Compiles every firmware env on a clean runner. Hardware-in-the-loop tests
+# need the device and run locally (`make test`); this only proves the tree builds.
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [probe, ws169]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/penv
+            ~/.platformio/dist
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      - name: Build ${{ matrix.env }}
+        working-directory: firmware
+        run: pio run -e ${{ matrix.env }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}
+          path: |
+            firmware/.pio/build/${{ matrix.env }}/firmware.bin
+            firmware/.pio/build/${{ matrix.env }}/bootloader.bin
+            firmware/.pio/build/${{ matrix.env }}/partitions.bin
+          if-no-files-found: error
