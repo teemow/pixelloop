@@ -8,27 +8,34 @@ Every tool talks to the board over the ESP32-S3's native USB-Serial/JTAG port
 using the line protocol documented in AGENTS.md. This module owns port
 discovery, the reset dance, log capture and the screenshot decoder so each
 tool stays a few lines long.
+
+The same protocol is spoken by the desktop simulator on its stdin/stdout.
+`--port sim:` launches `sim/build/pixelloop-sim` (`sim:<path>` for another
+binary) and talks to it over a pipe; every tool works unchanged on either.
 """
 from __future__ import annotations
 
 import base64
 import glob
 import os
+import select
+import subprocess
 import sys
 import time
 import zlib
 from typing import IO
 
-import serial  # type: ignore
-
 READY = "PIXELLOOP-READY"
 CRASH_MARKERS = ("Guru Meditation", "abort()", "assert failed", "rst:0x7 (TG0WDT", "rst:0x8 (TG1WDT",
                  "Task watchdog got triggered", "Stack smashing", "Brownout")
+SIM_PREFIX = "sim:"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SIM_DEFAULT = os.path.join(REPO, "sim", "build", "pixelloop-sim")
 
 
 def find_port(explicit: str | None = None) -> str:
     """Explicit argument, then $PIXELLOOP_PORT, then the first Espressif
-    USB-Serial/JTAG device, then /dev/ttyACM0."""
+    USB-Serial/JTAG device, then /dev/ttyACM0. `sim:` selects the simulator."""
     if explicit:
         return explicit
     env = os.environ.get("PIXELLOOP_PORT")
@@ -40,7 +47,7 @@ def find_port(explicit: str | None = None) -> str:
     acm = sorted(glob.glob("/dev/ttyACM*"))
     if acm:
         return acm[0]
-    sys.exit("no serial port found; pass --port or set PIXELLOOP_PORT")
+    sys.exit("no serial port found; pass --port (or --port sim: for the simulator) or set PIXELLOOP_PORT")
 
 
 def rgb565_to_png(raw: bytes, w: int, h: int, path: str) -> None:
@@ -72,15 +79,14 @@ def rle_decode(buf: bytes, expected: int) -> bytes:
     return bytes(out)
 
 
-class Device:
-    """One open console. Tees everything read to `log` when given."""
+class SerialTransport:
+    """The board's USB-Serial/JTAG console."""
 
-    def __init__(self, port: str | None = None, baud: int = 115200, log: IO[str] | None = None, echo: bool = False):
-        self.port = find_port(port)
-        self.log = log
-        self.echo = echo
+    def __init__(self, port: str, baud: int):
+        import serial  # type: ignore
+
         self.ser = serial.Serial()
-        self.ser.port = self.port
+        self.ser.port = port
         self.ser.baudrate = baud
         self.ser.timeout = 0.1
         # Do not assert DTR/RTS on open: USB-Serial/JTAG maps them to
@@ -88,12 +94,19 @@ class Device:
         self.ser.dtr = False
         self.ser.rts = False
         self.ser.open()
-        self._buf = b""
 
-    def close(self) -> None:
-        self.ser.close()
+    def read(self, timeout: float) -> bytes:
+        """Whatever has arrived, waiting at most `timeout` for the first byte."""
+        self.ser.timeout = timeout
+        first = self.ser.read(1)
+        if not first:
+            return b""
+        return first + self.ser.read(self.ser.in_waiting)
 
-    # -- low level -----------------------------------------------------------
+    def write(self, data: bytes) -> None:
+        self.ser.write(data)
+        self.ser.flush()
+
     def reset(self) -> None:
         """Hard reset into the application (RTS pulse, DTR low = GPIO0 high)."""
         self.ser.dtr = False
@@ -101,8 +114,88 @@ class Device:
         time.sleep(0.1)
         self.ser.rts = False
         time.sleep(0.05)
-        self._buf = b""
         self.ser.reset_input_buffer()
+
+    def close(self) -> None:
+        self.ser.close()
+
+
+class PipeTransport:
+    """The simulator as a child process; its stdin/stdout are the console."""
+
+    def __init__(self, binary: str):
+        if not os.path.isfile(binary) or not os.access(binary, os.X_OK):
+            sys.exit(f"simulator not built: {binary} (run `make sim-build`)")
+        self.argv = [binary, "--headless"]
+        self.proc: subprocess.Popen | None = None
+        self._start()
+
+    def _start(self) -> None:
+        self.proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+
+    def read(self, timeout: float) -> bytes:
+        assert self.proc and self.proc.stdout
+        fd = self.proc.stdout.fileno()
+        ready, _, _ = select.select([fd], [], [], timeout)
+        if not ready:
+            return b""
+        data = os.read(fd, 65536)
+        if not data:
+            raise RuntimeError(f"simulator exited with code {self.proc.wait()}")
+        return data
+
+    def write(self, data: bytes) -> None:
+        assert self.proc and self.proc.stdin
+        try:
+            self.proc.stdin.write(data)
+            self.proc.stdin.flush()
+        except BrokenPipeError as e:
+            raise RuntimeError(f"simulator exited with code {self.proc.wait()}") from e
+
+    def reset(self) -> None:
+        """A fresh process: the closest thing to a power cycle."""
+        self.close()
+        self._start()
+
+    def close(self) -> None:
+        if not self.proc:
+            return
+        proc, self.proc = self.proc, None
+        try:
+            if proc.stdin:
+                proc.stdin.close()  # EOF on stdin makes the simulator exit
+            proc.wait(timeout=2.0)
+        except (subprocess.TimeoutExpired, OSError):
+            proc.kill()
+            proc.wait()
+        if proc.stdout:
+            proc.stdout.close()
+
+
+def open_transport(port: str, baud: int) -> SerialTransport | PipeTransport:
+    if port.startswith(SIM_PREFIX):
+        return PipeTransport(port[len(SIM_PREFIX):] or SIM_DEFAULT)
+    return SerialTransport(port, baud)
+
+
+class Device:
+    """One open console. Tees everything read to `log` when given."""
+
+    def __init__(self, port: str | None = None, baud: int = 115200, log: IO[str] | None = None, echo: bool = False):
+        self.port = find_port(port)
+        self.log = log
+        self.echo = echo
+        self.io = open_transport(self.port, baud)
+        self._buf = b""
+
+    def close(self) -> None:
+        self.io.close()
+
+    # -- low level -----------------------------------------------------------
+    def reset(self) -> None:
+        """Restart the firmware: hard reset on the device, a new process for the simulator."""
+        self.io.reset()
+        self._buf = b""
 
     def readline(self, timeout: float) -> str | None:
         deadline = time.monotonic() + timeout
@@ -112,11 +205,10 @@ class Device:
                 line = raw.decode("utf-8", errors="replace").rstrip("\r")
                 self._tee(line)
                 return line
-            if time.monotonic() >= deadline:
+            left = deadline - time.monotonic()
+            if left <= 0:
                 return None
-            chunk = self.ser.read(65536)
-            if chunk:
-                self._buf += chunk
+            self._buf += self.io.read(min(left, 0.1))
 
     def _tee(self, line: str) -> None:
         if self.log:
@@ -126,8 +218,7 @@ class Device:
             print(line, flush=True)
 
     def send(self, line: str) -> None:
-        self.ser.write((line + "\n").encode())
-        self.ser.flush()
+        self.io.write((line + "\n").encode())
 
     # -- protocol ------------------------------------------------------------
     def wait_for(self, marker: str, timeout: float) -> list[str]:
