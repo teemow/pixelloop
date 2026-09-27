@@ -1,0 +1,19 @@
+# PlatformIO / ESP-IDF build state
+firmware/.pio/
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
+!firmware/sdkconfig.defaults.*
+firmware/managed_components/
+firmware/build/
+# host simulator build
+sim/build/
+# loop artifacts (screenshots, logs, probe results) are per-run, not source
+artifacts/
+# python
+__pycache__/
+.venv/
+*.pyc
+# editors / OS
+.vscode/
+.idea/
+.DS_Store

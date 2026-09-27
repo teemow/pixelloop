@@ -1,0 +1,9 @@
+# Boots to the home screen, reacts to a tap, and stays alive.
+reset
+expect-log PIXELLOOP-READY 40
+wait 800
+shot home
+tap 120 200          # the counter button on the home screen
+wait 400
+shot after-tap
+stats
