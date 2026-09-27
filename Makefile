@@ -7,6 +7,7 @@
 #   make shot  NAME=home       screenshot the device framebuffer -> artifacts/home.png
 #   make drive SCRIPT=tests/smoke.txt   send tap/swipe/shot commands from a script
 #   make test  BOARD=ws169     run every test under tests/ against the device
+#   make capture SECONDS=20    reset + record the raw console (any firmware)
 #   make monitor               interactive serial console (Ctrl-C to leave)
 #   make photo NAME=desk       webcam photo of the physical device -> artifacts/desk.jpg
 #
@@ -30,7 +31,7 @@ NAME  ?= shot
 # lock so a flash never races a monitor or a screenshot.
 LOCK  := flock $(ART)/.port.lock
 
-.PHONY: help probe build flash run shot drive test monitor photo clean need-board
+.PHONY: help probe build flash run shot drive test capture monitor photo clean need-board
 
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-10s %s\n", $$1, $$2}'
@@ -63,6 +64,9 @@ drive: | $(ART) ## run a tap/swipe/shot script against the device
 
 test: need-board | $(ART) ## run every test under tests/ against the device (UPDATE=1 accepts goldens)
 	$(LOCK) $(UV) run tools/test.py --port $(PORT) --board $(BOARD) --out-dir $(ART) $(if $(UPDATE),--update,)
+
+capture: | $(ART) ## reset and record the console for SECONDS (default 20) -> artifacts/capture.log
+	$(LOCK) $(UV) run tools/capture.py --port $(PORT) --seconds $(or $(SECONDS),20) --out $(ART)/capture.log
 
 monitor: ## interactive serial console
 	$(LOCK) bash -c 'cd $(FW) && $(PIO) device monitor -p $(PORT) -b 115200'

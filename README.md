@@ -1,5 +1,7 @@
 # PixelLoop
 
+[![build](https://github.com/teemow/pixelloop/actions/workflows/build.yml/badge.svg)](https://github.com/teemow/pixelloop/actions/workflows/build.yml)
+
 An operating system for ESP32 displays, built by coding agents, with the
 **hardware-in-the-loop test loop** that makes agent development possible:
 

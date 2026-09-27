@@ -35,6 +35,10 @@ edit code  →  make flash  →  make run (boot log)  →  make shot / make driv
    Anything time-dependent on screen must be pinned by the script first
    (`send clock 43200`), otherwise the golden flakes.
 
+For firmware that does not speak the protocol (bring-up tests, third-party
+images) `make capture SECONDS=20` resets the board and records the raw console
+into `artifacts/capture.log`, flagging crash markers.
+
 Ground truth beyond the framebuffer: `make photo NAME=desk` takes a webcam
 picture of the physical board (point the camera at it). Use it when the
 framebuffer says one thing and you suspect the panel shows another (wrong
