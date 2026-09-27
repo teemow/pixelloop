@@ -60,6 +60,12 @@ orientation, backlight off, colour swap).
   `board.h` and use its `BOARD_*` macros. Adding a board = a new directory under
   `boards/`, an `[env:<id>]` in `firmware/platformio.ini`, a fingerprint in
   `tools/probe.py`, and a row in `boards/README.md`.
+- **Deep sleep takes the USB port with it.** The console runs on the chip's
+  native USB-Serial/JTAG; when the firmware deep-sleeps, `/dev/ttyACM0`
+  disappears and nothing on the host can reset or reflash the board until it
+  wakes (touch, button, or a timer it armed itself). On a USB-powered dev
+  board keep sleep timeouts long, always arm a timer wake, and never sleep
+  before `PIXELLOOP-READY`. `make capture` waits for the port to come back.
 - **Say what you verified.** "Flashed, boot log clean, `artifacts/home.png`
   shows the clock at 12:00 with the new font" is done. "Should work" is not.
 
