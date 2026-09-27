@@ -47,11 +47,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Install SDL2 and Ninja
+      - name: Install SDL2, Ninja and uv
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libsdl2-dev ninja-build
-      - uses: astral-sh/setup-uv@v10
+          pipx install uv
       - name: Build the simulator
         run: make sim-build
       - name: Golden tests against the simulator
