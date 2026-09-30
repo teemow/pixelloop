@@ -14,11 +14,11 @@ jobs:
       matrix:
         env: [probe, ws169]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.platformio/packages
@@ -46,7 +46,7 @@ jobs:
     # The OS UI on the host: same sources, LVGL + SDL2 rendering offscreen.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install SDL2, Ninja and uv
         run: |
           sudo apt-get update
