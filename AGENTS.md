@@ -167,7 +167,12 @@ Fixed console lines: `PIXELLOOP-READY` once the UI is up (the simulator adds
   exist yet (standard ESP-IDF behaviour). After editing a defaults file, delete
   `firmware/sdkconfig.<env>` so the next build regenerates it.
 - Host tools use `uv run <script>`; dependencies are declared in the script
-  header (PEP 723), no virtualenv to manage.
+  header (PEP 723), no virtualenv to manage. CI installs uv with
+  `pipx install uv` (pipx is on the ubuntu runners). Do not reach for
+  `astral-sh/setup-uv@v<latest major>`: the action keeps moving major tags
+  only up to `v7` although its releases are past 10.x, so `@v8` and later
+  fail with "unable to find version". Pin a full tag if the action is ever
+  needed.
 - The USB-Serial/JTAG device enumerates as `/dev/ttyACM0` (`303a:1001`); the
   user must be in the `uucp`/`dialout` group.
 - The simulator needs CMake 3.24+, Ninja, a C compiler and the SDL2
